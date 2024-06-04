@@ -6,6 +6,21 @@
   "scripts": {
     "test": "jest"
   },
+  "jest": {
+    "verbose": true,
+    "testRegex": "/test/.*\\.test\\.ts$",
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "@/(.*)": "<rootDir>/src/$1"
+    },
+    "transform": {
+      "\\.[jt]sx?$": "ts-jest"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!@rdfjs/data-model/)"
+    ]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pfoerdie/rdf-store-fs.git"

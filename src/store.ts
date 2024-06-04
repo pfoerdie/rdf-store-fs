@@ -20,6 +20,18 @@ export default class FSStore implements Store {
         this.#basePath = options?.basePath ?? process.cwd()
     }
 
+    get dataFactory() {
+        return this.#dataFactory
+    }
+
+    get baseIRI() {
+        return this.#baseIRI
+    }
+
+    get basePath() {
+        return this.#basePath
+    }
+
     match(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): QuadStream {
         const stream: QuadStream = new Readable({
             objectMode: true
