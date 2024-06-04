@@ -1,14 +1,6 @@
 import FSStore from '@/store'
 import { join as joinPath } from 'node:path'
 
-test('environment', async function () {
-    console.table({
-        'process.cwd()': process.cwd(),
-        '__dirname': __dirname,
-        '__filename': __filename,
-    })
-})
-
 describe('a filesystem store should', function () {
 
     test('be constructed without arguments', function () {

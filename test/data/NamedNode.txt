@@ -1,0 +1,6 @@
+rdf:type
+rdfs:Resource
+rdfs:label
+ex:Hello
+ex:World
+ex:target
