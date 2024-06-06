@@ -71,6 +71,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
   }
 
   // TODO how to handle insertion of multiple data where some data depends on the position bytes of other data?
+  // IDEA maybe move the task queue to the store instead of the engine, which makes things less secure but gives more freedom
 
   async close() {
     await this.#taskQueue.execute(async () => {
