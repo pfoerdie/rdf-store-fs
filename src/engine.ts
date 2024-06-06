@@ -70,6 +70,8 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
     }
   }
 
+  // TODO how to handle insertion of multiple data where some data depends on the position bytes of other data?
+
   async close() {
     await this.#taskQueue.execute(async () => {
       if (!this.#fileHandle) return
