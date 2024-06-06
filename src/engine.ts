@@ -219,7 +219,57 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     return Promise.all(values.map(({ type, value }) => this.insertOne(type, value)))
   }
 
-  // TODO async findOne<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Types[Key]> { }
-  // TODO async findMany<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Array<Types[Key]>> { }
+  async findOne<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Types[Key] | undefined> {
+    if (typeof filter !== 'function') throw new Error('invalid filter')
+    const binaryType = this.#typeMap[type]
+    if (!binaryType) throw new Error('unknown type')
+    return await this.#taskQueue.execute(async () => {
+      const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
+      const { size: fileSize } = await fileHandle.stat()
+      const metaBuffer = Buffer.alloc(5)
+      let currentPos = 0
+      while (currentPos < fileSize) {
+        await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
+        const byteId = metaBuffer.readUint8(0)
+        const byteSize = metaBuffer.readUint32BE(1)
+        if (byteId === binaryType.byteId) {
+          const dataBuffer = Buffer.alloc(byteSize)
+          await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos + metaBuffer.length)
+          const value = await binaryType.parse.call(this, dataBuffer)
+          if (filter(value)) return value
+        }
+        currentPos += metaBuffer.length + byteSize
+      }
+    })
+  }
+
+  async findMany<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Array<Types[Key]>> {
+    if (typeof filter !== 'function') throw new Error('invalid filter')
+    const binaryType = this.#typeMap[type]
+    if (!binaryType) throw new Error('unknown type')
+    return await this.#taskQueue.execute(async () => {
+      const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
+      const { size: fileSize } = await fileHandle.stat()
+      const metaBuffer = Buffer.alloc(5)
+      const values = []
+      let currentPos = 0
+      console.log({ fileSize, currentPos })
+      while (currentPos < fileSize) {
+        await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
+        const byteId = metaBuffer.readUint8(0)
+        const byteSize = metaBuffer.readUint32BE(1)
+        if (byteId === binaryType.byteId) {
+          const dataBuffer = Buffer.alloc(byteSize)
+          console.log({ byteId, byteSize })
+          await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos + metaBuffer.length)
+          // FIXME parsing the data can lock the process if the parser calls engine methods
+          const value = await binaryType.parse.call(this, dataBuffer)
+          if (filter(value)) values.push(value)
+        }
+        currentPos += metaBuffer.length + byteSize
+      }
+      return values
+    })
+  }
 
 }

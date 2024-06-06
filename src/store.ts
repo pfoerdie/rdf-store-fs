@@ -94,22 +94,38 @@ export default class FSStore implements Store {
   }
 
   match(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): QuadStream {
-    const stream: QuadStream = new Readable({
-      objectMode: true
-      // TODO implement connection to system resources
-    }) as EventEmitter as QuadStream
+    const stream = new Readable({
+      objectMode: true,
+      read: () => {
+        this.#storageEngine.findMany('Quad', (quad) => {
+          return (!subject || quad.subject.equals(subject))
+            && (!predicate || quad.predicate.equals(predicate))
+            && (!object || quad.object.equals(object))
+            && (!graph || quad.graph.equals(graph))
+        }).then((quads) => {
+          quads.forEach(quad => stream.push(quad))
+        }).catch(err => stream.destroy(err))
+      }
+    })
 
-    return stream
+    return stream as EventEmitter as QuadStream
   }
 
   import(stream: QuadStream): ResultEmitter {
     const emitter: ResultEmitter = new EventEmitter()
 
+    // stream
+    //   // .on('prefix', (prefix, iri) => void 0) // TODO optionally process prefixes
+    //   .on('data', (quad) => void 0) // TODO process data import
+    //   .on('error', (err) => emitter.emit('error', err)) // TODO data cleanup on error
+    //   .on('end', () => emitter.emit('end')) // TODO  wait for processes to finish
+
+    const quads: Array<Quad> = []
     stream
-      // .on('prefix', (prefix, iri) => void 0) // TODO optionally process prefixes
-      .on('data', (quad) => void 0) // TODO process data import
-      .on('error', (err) => emitter.emit('error', err)) // TODO data cleanup on error
-      .on('end', () => emitter.emit('end')) // TODO  wait for processes to finish
+      .on('data', (quad) => quads.push(quad))
+      .on('error', (err) => emitter.emit('error', err))
+      .on('end', () => this.#storageEngine.insertMany(quads.map(quad => ({ type: quad.termType, value: quad })))
+        .then(() => emitter.emit('end')).catch(err => emitter.emit('error', err)))
 
     return emitter
   }
