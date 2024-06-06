@@ -78,7 +78,34 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
     })
   }
 
-  // TODO rethink method naming (maybe use CRUMDL wording)
+  // async iterate<Key extends keyof Types>(): Promise<AsyncIterable<Types extends DefaultTypeMap ? any : Types[Key]>> {
+  //   return await this.#taskQueue.execute(async () => {
+  //     const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
+  //     const { size: fileSize } = await fileHandle.stat()
+  //     const engine = this
+  //     return {
+  //       async *[Symbol.asyncIterator]() {
+  //         const metaBuffer = Buffer.alloc(5)
+  //         let currentPos = 0
+  //         // NOTE reading the file here is not safe, because the function call is done outside the task queue
+  //         while (currentPos < fileSize) {
+  //           await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
+  //           const byteId = metaBuffer.readUint8(0)
+  //           const byteSize = metaBuffer.readUint32BE(1)
+  //           if (byteId !== 0x00) {
+  //             const binaryType = engine.#byteMap[byteId]
+  //             if (!binaryType) throw new Error('unknown byte id')
+  //             const dataBuffer = Buffer.alloc(byteSize)
+  //             await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos + metaBuffer.length)
+  //             yield await binaryType.parse.call(engine, dataBuffer)
+  //           }
+  //           currentPos += metaBuffer.length + byteSize
+  //         }
+  //       }
+  //       // [Symbol.asyncDispose]() { }
+  //     }
+  //   })
+  // }
 
   async retrieveOne<Key extends keyof Types>(valuePos: number): Promise<Types extends DefaultTypeMap ? any : Types[Key]> {
     if (valuePos < 0) throw new Error('invalid position')
@@ -87,18 +114,18 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
       const { size: fileSize } = await fileHandle.stat()
       const metaBuffer = Buffer.alloc(5)
       if (valuePos >= fileSize - metaBuffer.length) throw new Error('invalid position')
-      await fileHandle.read(metaBuffer, null, null, valuePos)
+      await fileHandle.read(metaBuffer, 0, metaBuffer.length, valuePos)
       const byteId = metaBuffer.readUint8(0)
       const binaryType: BinaryType<Types> = this.#byteMap[byteId]
       if (!binaryType) throw new Error('unknown type')
       const byteSize = metaBuffer.readUint32BE(1)
       const dataBuffer = Buffer.alloc(byteSize)
-      await fileHandle.read(dataBuffer, null, null, valuePos + metaBuffer.length)
+      await fileHandle.read(dataBuffer, 0, dataBuffer.length, valuePos + metaBuffer.length)
       return await binaryType.parse.call(this, dataBuffer)
     })
   }
 
-  // async findOne<Key extends keyof Types>(type: Key, ...args) { }
+  // TODO async retrieveMany<Key extends keyof Types>(valuePos: Array<number>): Promise<Array<Types extends DefaultTypeMap ? any : Types[Key]>> {}
 
   async insertOne<Key extends keyof Types>(type: Key, value: Types extends DefaultTypeMap ? any : Types[Key]): Promise<number> {
     const binaryType = this.#typeMap[type]
@@ -113,7 +140,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
       let insertPos: number = fileSize
       let availableSize: number = 0xffffffff
       while (currentPos < fileSize) {
-        await fileHandle.read(metaBuffer, null, null, currentPos)
+        await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
         const byteId = metaBuffer.readUint8(0)
         const byteSize = metaBuffer.readUint32BE(1)
         if (byteId === 0x00) {
@@ -128,22 +155,22 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
           }
         } else if (byteId === binaryType.byteId && byteSize === bytes.length) {
           const dataBuffer = Buffer.alloc(byteSize)
-          await fileHandle.read(dataBuffer, null, null, currentPos)
+          await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos)
           // if the data buffer from the file equals the bytes to save,
           // the bytes must not be inserted twice and the position can just be returned
           if (dataBuffer.equals(bytes)) return currentPos
         }
         currentPos += metaBuffer.length + byteSize
       }
-      metaBuffer.writeUint8(binaryType.byteId)
-      metaBuffer.writeUint32BE(bytes.length)
+      metaBuffer.writeUint8(binaryType.byteId, 0)
+      metaBuffer.writeUint32BE(bytes.length, 1)
       const insertBuffers: Array<Buffer> = [metaBuffer, bytes]
       // if inserted inside the file and the available size is greater than needed,
       // then add another empty meta buffer at the end of the byte data
       if (insertPos < fileSize && availableSize > bytes.length) {
         const emptyMetaBuffer = Buffer.alloc(metaBuffer.length)
-        emptyMetaBuffer.writeUint8(0x00)
-        emptyMetaBuffer.writeUint32BE(availableSize - bytes.length - metaBuffer.length)
+        emptyMetaBuffer.writeUint8(0x00, 0)
+        emptyMetaBuffer.writeUint32BE(availableSize - bytes.length - metaBuffer.length, 1)
         insertBuffers.push(emptyMetaBuffer)
       }
       await fileHandle.writev(insertBuffers, insertPos)
@@ -151,8 +178,9 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
     })
   }
 
-  // async insertMany<Key extends keyof Types>(values: Array<{ type: Key, value: Types extends DefaultTypeMap ? any : Types[Key] }>): Promise<Array<number>> {
-  //   // TODO batched insertion to increase performance and only iterate once over the file
-  // }
+  // TODO async insertMany<Key extends keyof Types>(values: Array<{ type: Key, value: Types extends DefaultTypeMap ? any : Types[Key] }>): Promise<Array<number>> { }
+
+  // TODO async findOne<Key extends keyof Types>(type: Key, filter: (value: Types extends DefaultTypeMap ? any : Types[Key]) => boolean): Promise<Types extends DefaultTypeMap ? any : Types[Key]> { }
+  // TODO async findMany<Key extends keyof Types>(type: Key, filter: (value: Types extends DefaultTypeMap ? any : Types[Key]) => boolean): Promise<Array<Types extends DefaultTypeMap ? any : Types[Key]>> { }
 
 }

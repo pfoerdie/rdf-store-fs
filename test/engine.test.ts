@@ -41,20 +41,30 @@ test('develop', async function () {
     }]
   })
 
-  const pos1 = await engine.insertOne('String', 'Hello World!')
+  const [pos1, pos2, pos3] = await Promise.all([
+    engine.insertOne('String', 'Hello World!'),
+    engine.insertOne('JSON', { lorem: 'ipsum' }),
+    engine.insertOne('Number', NaN)
+  ])
+
   expect(pos1).toBeGreaterThanOrEqual(0)
-  const pos2 = await engine.insertOne('JSON', { lorem: 'ipsum' })
   expect(pos2).toBeGreaterThanOrEqual(0)
-  const pos3 = await engine.insertOne('Number', NaN)
   expect(pos3).toBeGreaterThanOrEqual(0)
 
-  // await new Promise(resolve => setTimeout(resolve, 100))
+  // const values = []
+  // for await (const value of await engine.iterate()) {
+  //   values.push(value)
+  // }
+  // console.log(values)
 
-  const val1 = await engine.retrieveOne(pos1)
+  const [val1, val2, val3] = await Promise.all([
+    engine.retrieveOne(pos1),
+    engine.retrieveOne(pos2),
+    engine.retrieveOne(pos3)
+  ])
+
   expect(val1).toBe('Hello World!')
-  const val2 = await engine.retrieveOne(pos2)
   expect(val2).toEqual({ lorem: 'ipsum' })
-  const val3 = await engine.retrieveOne(pos3)
   expect(val3).toBe(NaN)
 
   await engine.close()
