@@ -2,21 +2,23 @@ import type { PathString } from './types'
 import type { FileHandle } from 'node:fs/promises'
 import { open as openFile } from 'node:fs/promises'
 
-type TypeMap<T> = Record<keyof T, any> | DefaultTypeMap
-type DefaultTypeMap = [never]
-
 type Awaitable<T> = T | Promise<T>
+type TypeMap<Types = Record<string, any>> = Record<string & keyof Types, any>
 
-export interface BinaryType<Types extends TypeMap<Types>> {
-  type: Types extends DefaultTypeMap ? string : keyof Types
-  byteId: number
-  parse<Key extends keyof Types>(this: StorageEngine<Types>, bytes: Buffer): Awaitable<Types extends DefaultTypeMap ? any : Types[Key]>
-  serialize<Key extends keyof Types>(this: StorageEngine<Types>, value: (Types extends DefaultTypeMap ? any : Types[Key])): Awaitable<Buffer>
+type BinaryTypeMap<Types extends TypeMap<Types>> = {
+  [Key in keyof Types]: {
+    type: Key
+    byteId: number
+    parse(this: StorageEngine<Types>, bytes: Buffer): Awaitable<Types[Key]>
+    serialize(this: StorageEngine<Types>, value: Types[Key]): Awaitable<Buffer>
+  }
 }
+
+export type BinaryType<Types extends TypeMap<Types>> = BinaryTypeMap<Types>[keyof Types]
 
 export interface StorageEngineOptions<Types extends TypeMap<Types>> {
   dataFile: PathString
-  binaryTypes: Array<BinaryType<Types>>
+  binaryTypes: Array<BinaryType<Types> | null | undefined>
 }
 
 class TaskQueue {
@@ -49,7 +51,14 @@ function isType(value: unknown): value is string {
     && /^\S+$/.test(value)
 }
 
-export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap> {
+function isPosition(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0x00000000
+    && value <= 0xffffffff
+}
+
+export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
 
   #dataFile: PathString
   #byteMap: Record<number, BinaryType<Types>> = Object.create(null)
@@ -60,6 +69,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
   constructor(options: StorageEngineOptions<Types>) {
     this.#dataFile = options.dataFile
     for (let binaryType of options.binaryTypes) {
+      if (!binaryType) continue
       binaryType = Object.freeze({ ...binaryType })
       if (!isByteId(binaryType.byteId)) throw new Error('invalid byte id')
       if (!isType(binaryType.type)) throw new Error('invalid binary type')
@@ -110,32 +120,52 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
   //   })
   // }
 
-  async retrieveOne<Key extends keyof Types>(valuePos: number): Promise<Types extends DefaultTypeMap ? any : Types[Key]> {
-    if (valuePos < 0) throw new Error('invalid position')
+  async retrieveOne<Key extends keyof Types>(position: number): Promise<Types[Key]> {
+    if (!isPosition(position)) throw new Error('invalid position')
+    // NOTE somehow typescript shows an error without the following 'await'
     return await this.#taskQueue.execute(async () => {
       const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
       const { size: fileSize } = await fileHandle.stat()
       const metaBuffer = Buffer.alloc(5)
-      if (valuePos >= fileSize - metaBuffer.length) throw new Error('invalid position')
-      await fileHandle.read(metaBuffer, 0, metaBuffer.length, valuePos)
+      if (position >= fileSize - metaBuffer.length) throw new Error('invalid position')
+      await fileHandle.read(metaBuffer, 0, metaBuffer.length, position)
       const byteId = metaBuffer.readUint8(0)
       const binaryType: BinaryType<Types> = this.#byteMap[byteId]
       if (!binaryType) throw new Error('unknown type')
       const byteSize = metaBuffer.readUint32BE(1)
       const dataBuffer = Buffer.alloc(byteSize)
-      await fileHandle.read(dataBuffer, 0, dataBuffer.length, valuePos + metaBuffer.length)
-      return await binaryType.parse.call(this, dataBuffer)
+      await fileHandle.read(dataBuffer, 0, dataBuffer.length, position + metaBuffer.length)
+      return binaryType.parse.call(this, dataBuffer)
     })
   }
 
-  // TODO async retrieveMany<Key extends keyof Types>(valuePos: Array<number>): Promise<Array<Types extends DefaultTypeMap ? any : Types[Key]>> {}
+  async retrieveMany<Key extends keyof Types>(positions: Array<number>): Promise<Array<Types[Key]>> {
+    if (!(Array.isArray(positions) && positions.every(isPosition))) throw new Error('invalid positions')
+    if (positions.length === 0) return []
+    return this.#taskQueue.execute(async () => {
+      const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
+      const { size: fileSize } = await fileHandle.stat()
+      return Promise.all(positions.map(async (position) => {
+        const metaBuffer = Buffer.alloc(5)
+        if (position >= fileSize - metaBuffer.length) throw new Error('invalid position')
+        await fileHandle.read(metaBuffer, 0, metaBuffer.length, position)
+        const byteId = metaBuffer.readUint8(0)
+        const binaryType: BinaryType<Types> = this.#byteMap[byteId]
+        if (!binaryType) throw new Error('unknown type')
+        const byteSize = metaBuffer.readUint32BE(1)
+        const dataBuffer = Buffer.alloc(byteSize)
+        await fileHandle.read(dataBuffer, 0, dataBuffer.length, position + metaBuffer.length)
+        return binaryType.parse.call(this, dataBuffer)
+      }))
+    })
+  }
 
-  async insertOne<Key extends keyof Types>(type: Key, value: Types extends DefaultTypeMap ? any : Types[Key]): Promise<number> {
+  async insertOne<Key extends keyof Types>(type: Key, value: Types[Key]): Promise<number> {
     const binaryType = this.#typeMap[type]
     if (!binaryType) throw new Error('unknown type')
     const bytes = await binaryType.serialize.call(this, value)
     if (bytes.length > 0xffffffff) throw new Error('too many bytes')
-    return await this.#taskQueue.execute(async () => {
+    return this.#taskQueue.execute(async () => {
       const fileHandle = this.#fileHandle || (this.#fileHandle = await openFile(this.#dataFile, 'w+'))
       const { size: fileSize } = await fileHandle.stat()
       const metaBuffer = Buffer.alloc(5)
@@ -181,9 +211,15 @@ export default class StorageEngine<Types extends TypeMap<Types> = DefaultTypeMap
     })
   }
 
-  // TODO async insertMany<Key extends keyof Types>(values: Array<{ type: Key, value: Types extends DefaultTypeMap ? any : Types[Key] }>): Promise<Array<number>> { }
+  async insertMany<Key extends keyof Types>(values: Array<{ type: Key, value: Types[Key] }>): Promise<Array<number>> {
+    if (!(Array.isArray(values) && values.every(entry => isType(entry?.type) && 'value' in entry))) throw new Error('invalid values')
+    if (values.length === 0) return []
+    if (values.length === 1) return [await this.insertOne(values[0].type, values[0].value)]
+    // TODO improve performance by only iterating once over the file
+    return Promise.all(values.map(({ type, value }) => this.insertOne(type, value)))
+  }
 
-  // TODO async findOne<Key extends keyof Types>(type: Key, filter: (value: Types extends DefaultTypeMap ? any : Types[Key]) => boolean): Promise<Types extends DefaultTypeMap ? any : Types[Key]> { }
-  // TODO async findMany<Key extends keyof Types>(type: Key, filter: (value: Types extends DefaultTypeMap ? any : Types[Key]) => boolean): Promise<Array<Types extends DefaultTypeMap ? any : Types[Key]>> { }
+  // TODO async findOne<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Types[Key]> { }
+  // TODO async findMany<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Array<Types[Key]>> { }
 
 }

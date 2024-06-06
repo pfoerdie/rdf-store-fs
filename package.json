@@ -42,7 +42,9 @@
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.2",
     "@types/rdfjs__data-model": "^2.0.8",
+    "i": "^0.3.7",
     "jest": "^29.7.0",
+    "npm": "^10.8.1",
     "ts-jest": "^29.1.4",
     "typescript": "^5.4.5"
   },

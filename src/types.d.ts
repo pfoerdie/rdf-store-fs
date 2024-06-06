@@ -10,10 +10,10 @@ export * from '@rdfjs/types'
 export type DOMString = string
 
 export interface ConstructorOptions {
-    /** DataFactory implementation that will be used to create all the Data Model instances. */
-    dataFactory?: DataFactory
-    /** Base IRI that will be used to resolve or create relative IRIs. */
-    baseIRI?: DOMString
+  /** DataFactory implementation that will be used to create all the Data Model instances. */
+  dataFactory?: DataFactory
+  /** Base IRI that will be used to resolve or create relative IRIs. */
+  baseIRI?: DOMString
 }
 
 /** 
@@ -23,18 +23,18 @@ export interface ConstructorOptions {
 export type PathString = string
 
 export type ResultEvents = {
-    end: []
-    error: [Error]
+  end: []
+  error: [Error]
 }
 
 export type ResultEmitter = EventEmitter<ResultEvents>
 
 export type StreamEvents = {
-    readable: []
-    end: []
-    error: [Error]
-    data: [Quad]
-    prefix: [string, NamedNode]
+  readable: []
+  end: []
+  error: [Error]
+  data: [Quad]
+  prefix: [string, NamedNode]
 }
 
 export type QuadStream = EventEmitter<StreamEvents> & Stream<Quad>
