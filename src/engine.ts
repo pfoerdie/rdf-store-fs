@@ -1,42 +1,18 @@
-import type { PathString } from './types'
+import type { PathString, Awaitable, TypeMap } from './types'
 import type { FileHandle } from 'node:fs/promises'
 import { open as openFile } from 'node:fs/promises'
+import TaskQueue from './TaskQueue'
 
-type Awaitable<T> = T | Promise<T>
-type TypeMap<Types = Record<string, any>> = Record<string & keyof Types, any>
-
-type BinaryTypeMap<Types extends TypeMap<Types>> = {
-  [Key in keyof Types]: {
-    type: Key
-    byteId: number
-    parse(this: StorageEngine<Types>, bytes: Buffer): Awaitable<Types[Key]>
-    serialize(this: StorageEngine<Types>, value: Types[Key]): Awaitable<Buffer>
-  }
-}
-
-export type BinaryType<Types extends TypeMap<Types>> = BinaryTypeMap<Types>[keyof Types]
+export type BinaryType<Types extends TypeMap<Types>> = { [Key in keyof Types]: {
+  type: Key
+  byteId: number
+  parse(this: StorageEngine<Types>, bytes: Buffer): Awaitable<Types[Key]>
+  serialize(this: StorageEngine<Types>, value: Types[Key]): Awaitable<Buffer>
+} }[keyof Types]
 
 export interface StorageEngineOptions<Types extends TypeMap<Types>> {
   dataFile: PathString
   binaryTypes: Array<BinaryType<Types> | null | undefined>
-}
-
-class TaskQueue {
-
-  #queue: Array<() => void> = []
-
-  execute<T>(task: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const current = () => void task().then(resolve).catch(reject).finally(() => {
-        this.#queue.shift()
-        const next = this.#queue[0]
-        if (next) next()
-      })
-      this.#queue.push(current)
-      if (this.#queue[0] === current) current()
-    })
-  }
-
 }
 
 function isByteId(value: unknown): value is number {
