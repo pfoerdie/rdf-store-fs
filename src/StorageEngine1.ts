@@ -4,8 +4,8 @@ import { open as openFile } from 'node:fs/promises'
 import TaskQueue from './TaskQueue'
 
 export type BinaryType<Types extends TypeMap<Types>> = { [Key in keyof Types]: {
-  type: Key
-  byteId: number
+  name: Key
+  byte: number
   parse(this: StorageEngine<Types>, bytes: Buffer): Awaitable<Types[Key]>
   serialize(this: StorageEngine<Types>, value: Types[Key]): Awaitable<Buffer>
 } }[keyof Types]
@@ -47,12 +47,12 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     for (let binaryType of options.binaryTypes) {
       if (!binaryType) continue
       binaryType = Object.freeze({ ...binaryType })
-      if (!isByteId(binaryType.byteId)) throw new Error('invalid byte id')
-      if (!isType(binaryType.type)) throw new Error('invalid binary type')
-      if (binaryType.byteId in this.#byteMap) throw new Error('duplicate byte id')
-      if (binaryType.type in this.#typeMap) throw new Error('duplicate binary type')
-      this.#byteMap[binaryType.byteId] = binaryType
-      this.#typeMap[binaryType.type] = binaryType
+      if (!isByteId(binaryType.byte)) throw new Error('invalid byte')
+      if (!isType(binaryType.name)) throw new Error('invalid name')
+      if (binaryType.byte in this.#byteMap) throw new Error('duplicate byte')
+      if (binaryType.name in this.#typeMap) throw new Error('duplicate name')
+      this.#byteMap[binaryType.byte] = binaryType
+      this.#typeMap[binaryType.name] = binaryType
     }
   }
 
@@ -162,7 +162,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
               availableSize = byteSize
             }
           }
-        } else if (byteId === binaryType.byteId && byteSize === bytes.length) {
+        } else if (byteId === binaryType.byte && byteSize === bytes.length) {
           const dataBuffer = Buffer.alloc(byteSize)
           await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos)
           // if the data buffer from the file equals the bytes to save,
@@ -171,7 +171,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
         }
         currentPos += metaBuffer.length + byteSize
       }
-      metaBuffer.writeUint8(binaryType.byteId, 0)
+      metaBuffer.writeUint8(binaryType.byte, 0)
       metaBuffer.writeUint32BE(bytes.length, 1)
       const insertBuffers: Array<Buffer> = [metaBuffer, bytes]
       // if inserted inside the file and the available size is greater than needed,
@@ -187,12 +187,12 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     })
   }
 
-  async insertMany<Key extends keyof Types>(values: Array<{ type: Key, value: Types[Key] }>): Promise<Array<number>> {
+  async insertMany<Key extends keyof Types>(values: Array<{ type: Key, data: Types[Key] }>): Promise<Array<number>> {
     if (!(Array.isArray(values) && values.every(entry => isType(entry?.type) && 'value' in entry))) throw new Error('invalid values')
     if (values.length === 0) return []
-    if (values.length === 1) return [await this.insertOne(values[0].type, values[0].value)]
+    if (values.length === 1) return [await this.insertOne(values[0].type, values[0].data)]
     // TODO improve performance by only iterating once over the file
-    return Promise.all(values.map(({ type, value }) => this.insertOne(type, value)))
+    return Promise.all(values.map(({ type, data }) => this.insertOne(type, data)))
   }
 
   async findOne<Key extends keyof Types>(type: Key, filter: (value: Types[Key]) => boolean): Promise<Types[Key] | undefined> {
@@ -208,7 +208,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
         await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
         const byteId = metaBuffer.readUint8(0)
         const byteSize = metaBuffer.readUint32BE(1)
-        if (byteId === binaryType.byteId) {
+        if (byteId === binaryType.byte) {
           const dataBuffer = Buffer.alloc(byteSize)
           await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos + metaBuffer.length)
           const value = await binaryType.parse.call(this, dataBuffer)
@@ -234,7 +234,7 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
         await fileHandle.read(metaBuffer, 0, metaBuffer.length, currentPos)
         const byteId = metaBuffer.readUint8(0)
         const byteSize = metaBuffer.readUint32BE(1)
-        if (byteId === binaryType.byteId) {
+        if (byteId === binaryType.byte) {
           const dataBuffer = Buffer.alloc(byteSize)
           console.log({ byteId, byteSize })
           await fileHandle.read(dataBuffer, 0, dataBuffer.length, currentPos + metaBuffer.length)

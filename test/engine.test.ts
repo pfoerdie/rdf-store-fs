@@ -1,4 +1,4 @@
-import StorageEngine from '@/engine'
+import StorageEngine from '@/StorageEngine1'
 import { join as joinPath } from 'node:path'
 
 test('develop', async function () {
@@ -9,8 +9,8 @@ test('develop', async function () {
   }>({
     dataFile: joinPath(__dirname, 'data', 'data.bin'),
     binaryTypes: [{
-      type: 'Number',
-      byteId: 0x01,
+      name: 'Number',
+      byte: 0x01,
       // @ts-ignore TODO
       parse(bytes: Buffer): number {
         return Number(bytes.toString())
@@ -19,8 +19,8 @@ test('develop', async function () {
         return Buffer.from(value.toString())
       }
     }, {
-      type: 'String',
-      byteId: 0x02,
+      name: 'String',
+      byte: 0x02,
       // @ts-ignore TODO 
       parse(bytes: Buffer): string {
         return bytes.toString()
@@ -29,8 +29,8 @@ test('develop', async function () {
         return Buffer.from(value)
       }
     }, {
-      type: 'JSON',
-      byteId: 0x03,
+      name: 'JSON',
+      byte: 0x03,
       // @ts-ignore TODO 
       parse(bytes: Buffer): any {
         return JSON.parse(bytes.toString())

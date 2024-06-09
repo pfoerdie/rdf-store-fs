@@ -1,4 +1,4 @@
-import FSStore from '@/store'
+import FSStore from '@/index'
 import { join as joinPath } from 'node:path'
 import { createReadStream } from 'node:fs'
 import { EventEmitter } from 'node:events'
@@ -31,6 +31,6 @@ describe('a filesystem store should', function () {
     const quads = await promifyStream(store.match(null, null, null, null) as Stream<Quad>)
     expect(quads.length).toBeGreaterThan(0)
     console.log(quads)
-  }, 60e3)
+  }, 10e3)
 
 })

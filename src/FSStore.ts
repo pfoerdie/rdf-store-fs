@@ -6,7 +6,7 @@ import type {
 import defaultDataFactory from '@rdfjs/data-model'
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
-import StorageEngine, { type BinaryType } from './engine'
+import StorageEngine from './StorageEngine1'
 
 interface FSStoreOptions extends ConstructorOptions {
   dataFile: PathString
@@ -31,62 +31,62 @@ export default class FSStore implements Store {
   constructor(options: FSStoreOptions) {
     const dataFactory: DataFactory = this.#dataFactory = options?.dataFactory ?? defaultDataFactory
     this.#baseIRI = options?.baseIRI ?? ''
-    this.#storageEngine = new StorageEngine({
+    const storageEngine: StorageEngine<StorageTypes> = this.#storageEngine = new StorageEngine({
       dataFile: options.dataFile,
       binaryTypes: [{
-        type: 'NamedNode',
-        byteId: 0x01,
+        name: 'NamedNode',
+        byte: 0x01,
         parse: (bytes) => dataFactory.namedNode(bytes.toString()),
         serialize: (namedNode) => Buffer.from(namedNode.value)
       }, {
-        type: 'BlankNode',
-        byteId: 0x02,
+        name: 'BlankNode',
+        byte: 0x02,
         // TODO guarantee for the uniqueness and belonging of blank nodes
         parse: (bytes) => dataFactory.blankNode(bytes.toString()),
         serialize: (blankNode) => Buffer.from(blankNode.value)
       }, {
-        type: 'Literal',
-        byteId: 0x03,
+        name: 'Literal',
+        byte: 0x03,
         async parse(bytes) {
           const langOrDtPos = bytes.readUint8(0)
-          const langOrDt = await this.retrieveOne(langOrDtPos) as string | NamedNode
+          const langOrDt = await storageEngine.retrieveOne(langOrDtPos) as string | NamedNode
           return dataFactory.literal(bytes.toString('utf-8', 1), langOrDt)
         },
         async serialize(literal) {
           const languageOrDatatype = literal.language || literal.datatype
-          const languageOrDatatypePos = await this.insertOne(typeof languageOrDatatype === 'string' ? 'language' : 'NamedNode', languageOrDatatype)
+          const languageOrDatatypePos = await storageEngine.insertOne(typeof languageOrDatatype === 'string' ? 'language' : 'NamedNode', languageOrDatatype)
           return Buffer.concat([Buffer.of(languageOrDatatypePos), Buffer.from(literal.value)])
         }
       }, {
-        type: 'Variable',
-        byteId: 0x04,
+        name: 'Variable',
+        byte: 0x04,
         parse: (bytes) => dataFactory.variable ? dataFactory.variable(bytes.toString()) : defaultDataFactory.variable(bytes.toString()),
         serialize: (variable) => Buffer.from(variable.value)
       }, {
-        type: 'DefaultGraph',
-        byteId: 0x05,
+        name: 'DefaultGraph',
+        byte: 0x05,
         parse: () => dataFactory.defaultGraph(),
         serialize: () => Buffer.alloc(0)
       }, {
-        type: 'Quad',
-        byteId: 0x06,
+        name: 'Quad',
+        byte: 0x06,
         async parse(bytes) {
           const positions = [bytes.readUint8(0), bytes.readUint8(1), bytes.readUint8(2), bytes.readUint8(3)]
-          const [subject, predicate, object, graph] = await this.retrieveMany(positions) as [Quad_Subject, Quad_Predicate, Quad_Object, Quad_Graph]
+          const [subject, predicate, object, graph] = await storageEngine.retrieveMany(positions) as [Quad_Subject, Quad_Predicate, Quad_Object, Quad_Graph]
           return dataFactory.quad(subject, predicate, object, graph)
         },
         async serialize(quad) {
-          const positions = await this.insertMany([
-            { type: quad.subject.termType, value: quad.subject },
-            { type: quad.predicate.termType, value: quad.predicate },
-            { type: quad.object.termType, value: quad.object },
-            { type: quad.graph.termType, value: quad.graph }
+          const positions = await storageEngine.insertMany([
+            { type: quad.subject.termType, data: quad.subject },
+            { type: quad.predicate.termType, data: quad.predicate },
+            { type: quad.object.termType, data: quad.object },
+            { type: quad.graph.termType, data: quad.graph }
           ])
           return Buffer.of(...positions)
         }
       }, {
-        type: 'language',
-        byteId: 0x07,
+        name: 'language',
+        byte: 0x07,
         parse: (bytes) => bytes.toString(),
         serialize: (language) => Buffer.from(language)
       }]
@@ -124,7 +124,7 @@ export default class FSStore implements Store {
     stream
       .on('data', (quad) => quads.push(quad))
       .on('error', (err) => emitter.emit('error', err))
-      .on('end', () => this.#storageEngine.insertMany(quads.map(quad => ({ type: quad.termType, value: quad })))
+      .on('end', () => this.#storageEngine.insertMany(quads.map(quad => ({ type: quad.termType, data: quad })))
         .then(() => emitter.emit('end')).catch(err => emitter.emit('error', err)))
 
     return emitter

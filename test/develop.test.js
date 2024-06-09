@@ -44,3 +44,27 @@ test('develop', async function () {
 
     await fileHandle.close()
 })
+
+test('FileHandle', async function() {
+console.time('test')
+  const filePath = joinPath(__dirname, 'data', 'lorem.txt')
+
+  const fileHandle1 = await openFile(filePath, 'w+')
+  setTimeout(() => fileHandle1.close(), 1000)
+  const fileHandle2 = await openFile(filePath, 'w+')
+  setTimeout(() => fileHandle2.close(), 1000)
+
+  // await fileHandle1.write(Buffer.alloc(2, 0), 0, 2, 0)
+  // await fileHandle2.write(Buffer.alloc(2, 1), 0, 2, 1)
+
+  await Promise.all([
+    fileHandle1.write(Buffer.alloc(2, 0), 0, 2, 0),
+    fileHandle1.write(Buffer.alloc(2, 1), 0, 2, 1)
+  ])
+
+  const result = await fileHandle1.read(Buffer.alloc(3), 0, 3, 0)
+  const array = Array.from(result.buffer)
+  console.log(array)
+
+  console.timeEnd('test')
+}, 10e3)

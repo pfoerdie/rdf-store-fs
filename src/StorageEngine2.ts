@@ -9,10 +9,10 @@ export type BinarySerializer<Type extends any> = (value: Type) => Awaitable<Buff
 
 type TypeDefinition<Types extends TypeMap<Types> = TypeMap> = { [Key in keyof Types]:
   {
-    id: Key
+    name: Key
     byte: Byte
-    serializer: BinarySerializer<Types[Key]>
-    parser: BinaryParser<Types[Key]>
+    serialize: BinarySerializer<Types[Key]>
+    parse: BinaryParser<Types[Key]>
   }
 }[keyof Types]
 
@@ -25,7 +25,7 @@ type SerializerMap<Types extends TypeMap<Types> = TypeMap> = { [Key in keyof Typ
 
 type ParserMap<Types extends TypeMap<Types> = TypeMap> = { [Key in keyof Types]:
   Record<Byte, {
-    readonly id: Key,
+    readonly name: Key,
     readonly parse: BinaryParser<Types[Key]>
   }>
 }[keyof Types]
@@ -44,19 +44,21 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
   constructor(options: StorageEngineOptions<Types>) {
     if (!isString(options.dataFile)) throw new Error('invalid dataFile')
     for (let typeDef of options.binaryTypes) {
-      if (!isToken(typeDef.id)) throw new Error('invalid binaryType id')
+      if (!isToken(typeDef.name)) throw new Error('invalid binaryType name')
       if (!isByte(typeDef.byte) || typeDef.byte === 0x00) throw new Error('invalid binaryType byte')
-      if (!isFunction(typeDef.parser)) throw new Error('invalid binaryType parser')
-      if (!isFunction(typeDef.serializer)) throw new Error('invalid binaryType serializer')
-      if (this.#serializers[typeDef.id]) throw new Error('duplicate binaryType id')
+      if (!isFunction(typeDef.parse)) throw new Error('invalid binaryType parser')
+      if (!isFunction(typeDef.serialize)) throw new Error('invalid binaryType serializer')
+      if (this.#serializers[typeDef.name]) throw new Error('duplicate binaryType name')
       if (this.#parsers[typeDef.byte]) throw new Error('duplicate binaryType byte')
-      this.#serializers[typeDef.id] = Object.freeze({ byte: typeDef.byte, serialize: typeDef.serializer })
-      this.#parsers[typeDef.byte] = Object.freeze({ id: typeDef.id, parse: typeDef.parser })
+      this.#serializers[typeDef.name] = Object.freeze({ byte: typeDef.byte, serialize: typeDef.serialize })
+      this.#parsers[typeDef.byte] = Object.freeze({ name: typeDef.name, parse: typeDef.parse })
     }
     Object.freeze(this.#serializers)
     Object.freeze(this.#parsers)
     this.#fileHandle = openFile(options.dataFile, 'w+').then(handle => this.#fileHandle = handle)
   }
+
+  // FIXME multiple writes corrupt the data
 
   async close() {
     const file = await this.#fileHandle
@@ -153,7 +155,13 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     if (dataArray.length === 0) return []
     if (dataArray.length === 1) return [await this.insertOne(dataArray[0].type, dataArray[0].data)]
     // TODO improve performance by only iterating once over the file
-    return Promise.all(dataArray.map(({ type, data }) => this.insertOne(type, data)))
+    const positionArray = new Array(dataArray.length)
+    for (let index = 0; index < dataArray.length; index++) {
+      const { type, data } = dataArray[index]
+      const position = await this.insertOne(type, data)
+      positionArray[index] = position
+    }
+    return positionArray
   }
 
   async findOne<Key extends keyof Types>(type: Key, filter: (data: Types[Key]) => boolean): Promise<Types[Key] | undefined> {
@@ -180,32 +188,58 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     }
   }
 
-  async findMany<Key extends keyof Types>(filterArray: { type: Key, filter: (data: Types[Key]) => boolean }): Promise<Array<Types[Key] | undefined>> {
-    if (!(Array.isArray(filterArray) && filterArray.every(({ type, filter }) => isToken(type) && isFunction(filter)))) throw new Error('invalid filter array')
-    if (filterArray.length === 0) return []
-    if (filterArray.length === 1) return [await this.findOne(filterArray[0].type, filterArray[0].filter)]
+  async findMany<Key extends keyof Types>(type: Key, filter: (data: Types[Key]) => boolean): Promise<Array<Types[Key]>> {
+    if (!isFunction(filter)) throw new Error('invalid filter')
+    const serializer = this.#serializers[type]
+    if (!serializer) throw new Error('serializer not found')
+    const parser = this.#parsers[serializer.byte]
+    if (!parser) throw new Error('parser not found')
     const fileHandle = await this.#fileHandle
     const { size: fileSize } = await fileHandle.stat()
     const metaBytes = Buffer.alloc(5)
-    const dataArray = new Array(filterArray.length).fill(undefined)
+    const dataArray = []
     let searchPosition = 0
     while (searchPosition < fileSize) {
       await fileHandle.read(metaBytes, 0, 5, searchPosition)
       const typeByte = metaBytes.readUint8(0)
       const dataSize = metaBytes.readUint32BE(1)
-      const parser = this.#parsers[typeByte]
-      if (!parser) throw new Error('parser not found')
-      for (let index = 0; index < filterArray.length; index++) {
-        if (isData(dataArray[index])) continue
-        const { type, filter } = filterArray[index]
-        if (parser.id !== type) continue
+      if (typeByte === serializer.byte) {
         const dataBytes = Buffer.alloc(dataSize)
         await fileHandle.read(dataBytes, 0, dataSize, searchPosition + 5)
         const data = await parser.parse(dataBytes)
-        if (filter(data)) dataArray[index] = data
+        if (filter(data)) dataArray.push(data)
       }
+      searchPosition += metaBytes.length + dataSize
     }
     return dataArray
   }
+
+  // async findMany<Key extends keyof Types>(filterArray: { type: Key, filter: (data: Types[Key]) => boolean }): Promise<Array<Types[Key] | undefined>> {
+  //   if (!(Array.isArray(filterArray) && filterArray.every(({ type, filter }) => isToken(type) && isFunction(filter)))) throw new Error('invalid filter array')
+  //   if (filterArray.length === 0) return []
+  //   if (filterArray.length === 1) return [await this.findOne(filterArray[0].type, filterArray[0].filter)]
+  //   const fileHandle = await this.#fileHandle
+  //   const { size: fileSize } = await fileHandle.stat()
+  //   const metaBytes = Buffer.alloc(5)
+  //   const dataArray = new Array(filterArray.length).fill(undefined)
+  //   let searchPosition = 0
+  //   while (searchPosition < fileSize) {
+  //     await fileHandle.read(metaBytes, 0, 5, searchPosition)
+  //     const typeByte = metaBytes.readUint8(0)
+  //     const dataSize = metaBytes.readUint32BE(1)
+  //     const parser = this.#parsers[typeByte]
+  //     if (!parser) throw new Error('parser not found')
+  //     for (let index = 0; index < filterArray.length; index++) {
+  //       if (isData(dataArray[index])) continue
+  //       const { type, filter } = filterArray[index]
+  //       if (parser.name !== type) continue
+  //       const dataBytes = Buffer.alloc(dataSize)
+  //       await fileHandle.read(dataBytes, 0, dataSize, searchPosition + 5)
+  //       const data = await parser.parse(dataBytes)
+  //       if (filter(data)) dataArray[index] = data
+  //     }
+  //   }
+  //   return dataArray
+  // }
 
 }
