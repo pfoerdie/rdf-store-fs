@@ -1,10 +1,10 @@
-import FSStore from '@/backup/index'
+import FSStore from '../src/index'
 import { join as joinPath } from 'node:path'
 import { createReadStream } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import rdfParser from 'rdf-parse'
 import rdfSerializer from 'rdf-serialize'
-import { Quad, QuadStream } from '@/backup/types'
+import { Quad, QuadStream } from '../src/types'
 
 type Stream<T> = EventEmitter<{ data: [T], error: [Error], end: [] }>
 
