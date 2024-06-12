@@ -8,7 +8,7 @@ export interface FileManagerOptions {
   extension?: Token | null
 }
 
-export default class FileManager<FileNames extends Token> {
+export default class FileManager<FileNames extends Token = Token> {
 
   #root: PathString
   #extension: Token | null

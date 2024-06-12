@@ -63,16 +63,30 @@ export function isToken(value: unknown): value is Token {
     && /^\S+$/.test(value)
 }
 
-export type Uint8 = number
+export type Integer = number
+
+export function isInteger(value: unknown): value is Integer {
+  return isNumber(value) && Number.isInteger(value)
+}
+
+export type Uint8 = Integer
 
 export function isUint8(value: unknown): value is Uint8 {
-  return isNumber(value)
-    && Number.isInteger(value)
+  return isInteger(value)
     && value >= 0x00
     && value <= 0xff
 }
 
-export type Uint32 = number
+export type Uint16 = Integer
+
+export function isUint16(value: unknown): value is Uint16 {
+  return isNumber(value)
+    && Number.isInteger(value)
+    && value >= 0x0000
+    && value <= 0xffff
+}
+
+export type Uint32 = Integer
 
 export function isUint32(value: unknown): value is Uint32 {
   return isNumber(value)
@@ -96,3 +110,6 @@ export function isFileHandle(value: unknown): value is FileHandle {
     && isFunction(value.write)
     && isFunction(value.truncate)
 }
+
+export type Awaitable<T> = T | Promise<T>
+export type TypeMap<Types = Record<PropertyKey, any>> = Record<keyof Types, any>

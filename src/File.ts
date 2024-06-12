@@ -22,7 +22,7 @@ export interface FileChunk {
   buffer: Buffer
 }
 
-export default class File<FileName extends Token> {
+export default class File<FileName extends Token = Token> {
 
   static async open<FileName extends Token>({ name, path }: OpenFileOptions<FileName>): Promise<File<FileName>> {
     if (!isToken(name)) throw new Error('name is not a Token')
