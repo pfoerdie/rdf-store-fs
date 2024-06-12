@@ -2,6 +2,7 @@
 // import type { DataFactory, Stream, Quad, NamedNode } from '@rdfjs/types'
 import type { Stats as FileStats } from 'node:fs'
 import type { FileHandle } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 
 export function isNull(value: unknown): value is null | undefined {
   return (value ?? null) === null
@@ -46,13 +47,13 @@ export function isDOMString(value: unknown): value is DOMString {
 }
 
 /** 
- * The PathString type corresponds to file paths on the respective system 
- * that this node instance is running on.
+ * The PathString type corresponds to absolute file paths 
+ * on the respective system that this node instance is running on.
  */
 export type PathString = string
 
 export function isPathString(value: unknown): value is PathString {
-  return isString(value)
+  return isString(value) && isAbsolute(value)
 }
 
 export type Token = string

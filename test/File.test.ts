@@ -2,9 +2,9 @@ import { join, basename } from 'node:path'
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import File from '../src/File'
 
-const TESTDIR = join(__dirname, 'File.test')
-
 describe('a File should', function () {
+
+  const TESTDIR = join(__dirname, 'File.test')
 
   beforeAll(async function () {
     await rm(TESTDIR, { recursive: true, force: true })
@@ -13,7 +13,7 @@ describe('a File should', function () {
 
   test('be used with the open method', async function () {
     const TESTFILE = join(TESTDIR, 'example.txt')
-    await writeFile(TESTFILE, '', { flag: 'wx+' })
+    await writeFile(TESTFILE, 'test', { flag: 'wx+' })
 
     const file = await File.open({
       name: basename(TESTFILE),
@@ -21,6 +21,11 @@ describe('a File should', function () {
     })
 
     expect(file).toBeInstanceOf(File)
+    expect(file).toMatchObject({
+      name: basename(TESTFILE),
+      path: TESTFILE,
+      size: Buffer.byteLength('test')
+    })
   })
 
   test('create a missing file', async function () {

@@ -1,5 +1,6 @@
 import { FileHandle, open as openFile } from 'node:fs/promises'
 import { Stats as FileStats, constants as FS_CONST } from 'node:fs'
+import { normalize as normalizePath } from 'node:path'
 import { Token, PathString, Uint32, isString, isUint32, isBuffer, isToken, isPathString, isFileStats, isFileHandle } from './types'
 import TaskQueue from './TaskQueue'
 
@@ -10,6 +11,7 @@ export interface OpenFileOptions<FileName> {
 
 export interface FileOptions<FileName> {
   name: FileName
+  path: PathString
   handle: FileHandle
   stats: FileStats
 }
@@ -27,19 +29,22 @@ export default class File<FileName extends Token> {
     if (!isPathString(path)) throw new Error('path is not a PathString')
     const handle = await openFile(path, FS_CONST.O_RDWR | FS_CONST.O_CREAT)
     const stats = await handle.stat()
-    return new File({ name, handle, stats })
+    return new File({ name, path, handle, stats })
   }
 
   #name: FileName
+  #path: PathString
   #size: Uint32
   #handle: FileHandle
   #queue: TaskQueue
 
-  constructor({ name, stats, handle }: FileOptions<FileName>) {
+  constructor({ name, path, stats, handle }: FileOptions<FileName>) {
     if (!isToken(name)) throw new Error('name is not a Token')
+    if (!isPathString(path)) throw new Error('path is not a PathString')
     if (!isFileStats(stats)) throw new Error('stats is not a FileStats')
     if (!isFileHandle(handle)) throw new Error('handle is not a FileHandle')
     this.#name = name
+    this.#path = normalizePath(path)
     this.#size = stats.size
     this.#handle = handle
     this.#queue = new TaskQueue()
@@ -47,6 +52,10 @@ export default class File<FileName extends Token> {
 
   get name() {
     return this.#name
+  }
+
+  get path() {
+    return this.#path
   }
 
   get size() {
