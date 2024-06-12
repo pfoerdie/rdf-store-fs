@@ -1,6 +1,6 @@
 import { FileHandle, open as openFile } from 'node:fs/promises'
-import { Stats as FileStats } from 'node:fs'
-import { Token, PathString, Uint32, isNumber, isString, isUint32, isBuffer, isToken, isPathString, isFileStats, isFileHandle } from './types'
+import { Stats as FileStats, constants as FS_CONST } from 'node:fs'
+import { Token, PathString, Uint32, isString, isUint32, isBuffer, isToken, isPathString, isFileStats, isFileHandle } from './types'
 import TaskQueue from './TaskQueue'
 
 export interface OpenFileOptions<FileName> {
@@ -25,7 +25,7 @@ export default class File<FileName extends Token> {
   static async open<FileName extends Token>({ name, path }: OpenFileOptions<FileName>): Promise<File<FileName>> {
     if (!isToken(name)) throw new Error('name is not a Token')
     if (!isPathString(path)) throw new Error('path is not a PathString')
-    const handle = await openFile(path, 'r+')
+    const handle = await openFile(path, FS_CONST.O_RDWR | FS_CONST.O_CREAT)
     const stats = await handle.stat()
     return new File({ name, handle, stats })
   }
@@ -64,7 +64,7 @@ export default class File<FileName extends Token> {
       const buffer = isUint32(bytes) ? Buffer.alloc(bytes) : bytes
       if (!isBuffer(buffer)) throw new Error('bytes is not an unint32 or a buffer')
       const length = buffer.length
-      if (position + length >= this.#size) throw new Error('reading bytes out of file')
+      if (position + length > this.#size) throw new Error('reading bytes out of file')
       await this.#handle.read(buffer, 0, length, position)
       return { position, length, buffer }
     })
@@ -102,7 +102,7 @@ export default class File<FileName extends Token> {
       if (!isUint32(position)) throw new Error('position is not an uint32')
       if (position >= this.#size) throw new Error('position is out of file')
       if (!isUint32(bytes)) throw new Error('bytes is not an uint32')
-      if (position + bytes >= this.#size) throw new Error('clearing bytes out of file')
+      if (position + bytes > this.#size) throw new Error('clearing bytes out of file')
       const buffer = Buffer.alloc(bytes)
       const length = buffer.length
       await this.#handle.write(buffer, 0, length, position)
