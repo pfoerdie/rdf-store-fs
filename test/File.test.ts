@@ -1,25 +1,118 @@
+import { join, basename } from 'node:path'
+import { mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import File from '../src/File'
-import { join as joinPath } from 'node:path'
 
-test('develop', async function () {
-  const test = await File.open({
-    name: 'Test',
-    path: joinPath(__dirname, 'data', 'example.txt')
+const TESTDIR = join(__dirname, 'File.test')
+
+describe('a File should', function () {
+
+  beforeAll(async function () {
+    await rm(TESTDIR, { recursive: true, force: true })
+    await mkdir(TESTDIR, { recursive: true })
   })
 
-  console.table({
-    size: test.size,
-    value: '' + await test.read(0, test.size)
+  test('be used with the open method', async function () {
+    const TESTFILE = join(TESTDIR, 'example.txt')
+    await writeFile(TESTFILE, '', { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    expect(file).toBeInstanceOf(File)
   })
 
-  // await test.write(0, 'Hello World!')
-  // await test.write(6, 'Hello World!')
-  await test.write(12, 'Hello World!')
+  test('create a missing file', async function () {
+    const TESTFILE = join(TESTDIR, 'missing.txt')
+    await rm(TESTFILE, { force: true })
 
-  console.table({
-    size: test.size,
-    value: '' + await test.read(0, test.size)
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    await expect(() => readFile(TESTFILE, 'utf-8')).resolves.toBe('')
   })
 
-  await test.close()
+  test('read content at a specific position', async function () {
+    const TESTFILE = join(TESTDIR, 'hello.txt')
+    await writeFile(TESTFILE, 'Hello World!', { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    expect(await file.read(0, 5)).toMatchObject({ position: 0, length: 5 })
+    expect((await file.read(0, file.size)).toString()).toBe('Hello World!')
+    await expect(() => file.read(-1, 0)).rejects.toThrow()
+    await expect(() => file.read(0, 1.5)).rejects.toThrow()
+  })
+
+  test('write content at a specific position', async function () {
+    const TESTFILE = join(TESTDIR, 'lorem.txt')
+    await writeFile(TESTFILE, 'Lorem Ipsum', { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    await file.write(0, 'Ipsum')
+    await file.write(6, 'Lorem')
+    expect(await readFile(TESTFILE, 'utf-8')).toBe('Ipsum Lorem')
+    await expect(() => file.write(-1, 'test')).rejects.toThrow()
+  })
+
+  test('append content at the end of the file', async function () {
+    const TESTFILE = join(TESTDIR, 'pi.txt')
+    await writeFile(TESTFILE, '3', { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    await Promise.all([
+      file.append('.'),
+      file.append('141'),
+      file.append('59')
+    ])
+    expect(await readFile(TESTFILE, 'utf-8')).toBe('3.14159')
+  })
+
+  test('clear sections of the file to null bytes', async function () {
+    const TESTFILE = join(TESTDIR, 'ones.txt')
+    await writeFile(TESTFILE, Buffer.alloc(4, 1), { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    await file.clear(1, 2)
+    expect(Array.from(await readFile(TESTFILE))).toEqual<number[]>([1, 0, 0, 1])
+    await expect(() => file.clear(3, 2)).rejects.toThrow()
+  })
+
+  test('delete bytes at the end of the file', async function () {
+    const TESTFILE = join(TESTDIR, 'zeros.txt')
+    await writeFile(TESTFILE, Buffer.alloc(20), { flag: 'wx+' })
+
+    const file = await File.open({
+      name: basename(TESTFILE),
+      path: TESTFILE
+    })
+
+    await Promise.all([
+      file.delete(4),
+      file.delete(6),
+      file.delete(8)
+    ])
+    expect(file.size).toBe(2)
+    expect(Array.from(await readFile(TESTFILE))).toEqual<number[]>([0, 0])
+    await expect(() => file.delete(10)).rejects.toThrow()
+  })
+
 })

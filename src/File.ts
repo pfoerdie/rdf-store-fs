@@ -57,12 +57,12 @@ export default class File<FileName extends Token> {
     return this.#handle.close()
   }
 
-  read(position: Uint32, bytes: Uint32 | Buffer | string): Promise<FileChunk> {
+  read(position: Uint32, bytes: Uint32 | Buffer): Promise<FileChunk> {
     return this.#queue.execute(async () => {
       if (!isUint32(position)) throw new Error('position is not an uint32')
       if (position >= this.#size) throw new Error('position is out of file')
-      const buffer = isNumber(bytes) ? Buffer.alloc(bytes) : isString(bytes) ? Buffer.from(bytes) : bytes
-      if (!isBuffer(buffer)) throw new Error('bytes is not an unint32, a string or a buffer')
+      const buffer = isUint32(bytes) ? Buffer.alloc(bytes) : bytes
+      if (!isBuffer(buffer)) throw new Error('bytes is not an unint32 or a buffer')
       const length = buffer.length
       if (position + length >= this.#size) throw new Error('reading bytes out of file')
       await this.#handle.read(buffer, 0, length, position)
