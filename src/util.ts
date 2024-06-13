@@ -8,6 +8,17 @@ export function checksum(data: Buffer): Buffer {
 }
 
 export function bytesum(data: Buffer): Uint8 {
-  return data.reduce((acc, val) => (acc + val) % 0xff, 0x00)
-  // IDEA alternatively adding bytes to Buffer.alloc(1)[0] overflows without calculating modulus
+  const sum = Buffer.alloc(1)
+  for (let i = 0, l = data.length; i < l; i++) {
+    sum[0] += data[i]
+  }
+  return sum[0]
+}
+
+export function bytexor(data: Buffer): Uint8 {
+  const xor = Buffer.alloc(1)
+  for (let i = 0, l = data.length; i < l; i++) {
+    xor[0] ^= data[i]
+  }
+  return xor[0]
 }

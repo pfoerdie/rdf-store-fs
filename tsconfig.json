@@ -19,6 +19,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@pfoerdie/rdf-store-fs": [
+        "./src"
       ]
     }
   },

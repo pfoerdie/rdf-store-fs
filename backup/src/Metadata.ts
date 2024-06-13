@@ -1,22 +1,20 @@
-import { Uint32, isUint32, Uint16, isUint16, isBuffer } from './types'
-
 export interface MetadataOptions {
-  position: Uint32
-  type: Uint16
-  length: Uint32
-  checksum: Uint16
+  position: number
+  type: number
+  length: number
+  checksum: number
 }
 
 export interface MetadataBufferOptions {
-  position: Uint32
+  position: number
   buffer: Buffer
 }
 
 export default class Metadata implements Readonly<MetadataOptions> {
 
   static parse({ position, buffer }: MetadataBufferOptions): Metadata {
-    if (!isUint32(position)) throw new Error('position is not an Uint32')
-    if (!isBuffer(buffer)) throw new Error('buffer is not a Buffer')
+    if (!Number.isInteger(position)) throw new Error('position is not an integer')
+    if (!Buffer.isBuffer(buffer)) throw new Error('buffer is not a Buffer')
     if (buffer.length !== 8) throw new Error('buffer does not have length 8')
     return new Metadata({
       position: position + 8,
@@ -26,16 +24,16 @@ export default class Metadata implements Readonly<MetadataOptions> {
     })
   }
 
-  readonly position: Uint32
-  readonly type: Uint16
-  readonly length: Uint32
-  readonly checksum: Uint16
+  readonly position: number
+  readonly type: number
+  readonly length: number
+  readonly checksum: number
 
   constructor({ position, type, length, checksum }: MetadataOptions) {
-    if (!isUint32(position)) throw new Error('position is not an Uint32')
-    if (!isUint16(type)) throw new Error('type is not an Uint16')
-    if (!isUint32(length)) throw new Error('length is not an Uint32')
-    if (!isUint16(checksum)) throw new Error('checksum is not an Uint16')
+    if (!Number.isInteger(position)) throw new Error('position is not an integer')
+    if (!Number.isInteger(type)) throw new Error('type is not an integer')
+    if (!Number.isInteger(length)) throw new Error('length is not an integer')
+    if (!Number.isInteger(checksum)) throw new Error('checksum is not an integer')
     this.position = position
     this.type = type
     this.length = length
