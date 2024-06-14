@@ -113,3 +113,4 @@ export function isFileHandle(value: unknown): value is FileHandle {
 
 export type Awaitable<T> = T | Promise<T>
 export type TypeMap<Types = Record<PropertyKey, any>> = Record<keyof Types, any>
+export type FixedArray<L extends number, T> = Array<T> & { length: L }
