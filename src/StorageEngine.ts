@@ -49,8 +49,8 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
     const byte = meta.buffer.readUint8(0)
     const parser = this.#parsers[byte]
     if (!parser) throw new Error('parser not found')
-    const length = meta.buffer.readUint32BE(1)
-    const data = await file.read(position + 5, length)
+    const size = meta.buffer.readUint32BE(1)
+    const data = await file.read(position + 5, size)
     return parser.parse(data.buffer) as Types[Type]
   }
 

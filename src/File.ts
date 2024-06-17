@@ -18,7 +18,7 @@ export interface FileOptions<FileName> {
 
 export interface FileChunk {
   position: Uint32
-  length: Uint32
+  size: Uint32
   buffer: Buffer
 }
 
@@ -72,10 +72,10 @@ export default class File<FileName extends Token = Token> {
       if (position >= this.#size) throw new Error('position is out of file')
       const buffer = isUint32(bytes) ? Buffer.alloc(bytes) : bytes
       if (!isBuffer(buffer)) throw new Error('bytes is not an unint32 or a buffer')
-      const length = buffer.length
-      if (position + length > this.#size) throw new Error('reading bytes out of file')
-      await this.#handle.read(buffer, 0, length, position)
-      return { position, length, buffer }
+      const size = buffer.length
+      if (position + size > this.#size) throw new Error('reading bytes out of file')
+      await this.#handle.read(buffer, 0, size, position)
+      return { position, size, buffer }
     })
   }
 
@@ -84,12 +84,12 @@ export default class File<FileName extends Token = Token> {
       if (!isUint32(position)) throw new Error('position is not an uint32')
       if (position >= this.#size) throw new Error('position is out of file')
       const buffer = isString(bytes) ? Buffer.from(bytes) : bytes
-      const length = buffer.length
+      const size = buffer.length
       if (!isBuffer(buffer)) throw new Error('bytes is not a string or a buffer')
-      if (!isUint32(position + length)) throw new Error('writing bytes over the max size')
-      await this.#handle.write(buffer, 0, length, position)
-      this.#size = Math.max(this.#size, position + length)
-      return { position, length, buffer }
+      if (!isUint32(position + size)) throw new Error('writing bytes over the max size')
+      await this.#handle.write(buffer, 0, size, position)
+      this.#size = Math.max(this.#size, position + size)
+      return { position, size, buffer }
     })
   }
 
@@ -97,12 +97,12 @@ export default class File<FileName extends Token = Token> {
     return this.#queue.execute(async () => {
       const position = this.#size
       const buffer = isString(bytes) ? Buffer.from(bytes) : bytes
-      const length = buffer.length
+      const size = buffer.length
       if (!isBuffer(buffer)) throw new Error('bytes is not a string or a buffer')
-      if (!isUint32(position + length)) throw new Error('writing bytes over the max size')
-      await this.#handle.write(buffer, 0, length, position)
-      this.#size = position + length
-      return { position, length, buffer }
+      if (!isUint32(position + size)) throw new Error('writing bytes over the max size')
+      await this.#handle.write(buffer, 0, size, position)
+      this.#size = position + size
+      return { position, size, buffer }
     })
   }
 
@@ -113,9 +113,9 @@ export default class File<FileName extends Token = Token> {
       if (!isUint32(bytes)) throw new Error('bytes is not an uint32')
       if (position + bytes > this.#size) throw new Error('clearing bytes out of file')
       const buffer = Buffer.alloc(bytes)
-      const length = buffer.length
-      await this.#handle.write(buffer, 0, length, position)
-      return { position, length, buffer }
+      const size = buffer.length
+      await this.#handle.write(buffer, 0, size, position)
+      return { position, size, buffer }
     })
   }
 
