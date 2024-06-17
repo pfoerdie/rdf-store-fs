@@ -3,19 +3,22 @@ import File from './File'
 
 export interface DataOptions {
   file: File
+  position?: Uint32
 }
 
-export default class Data {
+export default class DataChunk {
 
   #file: File
+
+  constructor({ file, position }: DataOptions) {
+    if (!(file instanceof File)) throw new Error('file must be an instance of File')
+    this.#file = file
+    if (!isNull(position)) this.position = position
+  }
+
   #metadata: Buffer = Buffer.alloc(8)
   #data: Buffer | null = null
   #position: Buffer = Buffer.alloc(4)
-
-  constructor({ file }: DataOptions) {
-    if (!(file instanceof File)) throw new Error('file must be an instance of File')
-    this.#file = file
-  }
 
   get file(): File {
     return this.#file

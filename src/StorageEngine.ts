@@ -1,5 +1,6 @@
 import { PathString, isPathString, TypeMap, Awaitable, isArray, isToken, isUint8, Uint8, Token, isFunction, isUint32, Uint32 } from './types'
 import FileManager from './FileManager'
+import DataChunk from './DataChunk'
 
 export interface StorageEngineOptions<Types extends TypeMap<Types> = TypeMap> {
   root: PathString
@@ -45,13 +46,12 @@ export default class StorageEngine<Types extends TypeMap<Types> = TypeMap> {
   async retrieveOne<Type extends keyof Types>(position: Uint32): Promise<Types[Type]> {
     if (!isUint32(position)) throw new Error('position is not an Uint32')
     const file = await this.#manager.open('data')
-    const meta = await file.read(position, 5)
-    const byte = meta.buffer.readUint8(0)
-    const parser = this.#parsers[byte]
+    const chunk = new DataChunk({ file, position })
+    await chunk.readMetadata()
+    const parser = this.#parsers[chunk.type]
     if (!parser) throw new Error('parser not found')
-    const size = meta.buffer.readUint32BE(1)
-    const data = await file.read(position + 5, size)
-    return parser.parse(data.buffer) as Types[Type]
+    await chunk.readData()
+    return parser.parse(chunk.data as Buffer) as Types[Type]
   }
 
   // TODO
