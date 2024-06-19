@@ -2,6 +2,8 @@ import { Uint32, Uint8, isUint8, RecursiveRecord, FilterArray, isNull } from './
 
 export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Value extends any> {
 
+  // TODO rewrite to use recursive maps instead of records, to preserve the original keys
+
   #depth: Uint8 & Keys['length']
   #size: Uint32
   #entries: RecursiveRecord<Keys, Value>
@@ -135,8 +137,28 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
    * @param filter The filter for the keys, a null as placeholder.
    * @returns An iterator over the matching entries, the keys followed by the value as array.
    */
-  * entries(...filter: FilterArray<Keys>): IterableIterator<[...Keys, Value]> {
+  entries(...filter: FilterArray<Keys>): IterableIterator<[...Keys, Value]> {
     if (filter.length > this.#depth) throw new Error('the number of filter keys must not exceed the depth')
+
+    function* extractEntries<Keys extends [PropertyKey, ...PropertyKey[]]>(entry: RecursiveRecord<Keys, Value>, filter: FilterArray<Keys>, depth: Keys['length']): IterableIterator<[...Keys, Value]> {
+      const [filterKey, ...restFilter] = filter
+      const keys = isNull(filterKey) ? Object.keys(entry) : (filterKey in entry) ? [filterKey] : []
+      for (let key of keys) {
+        if (depth > 1) {
+          type FirstKey = Keys extends [infer First extends PropertyKey, ...PropertyKey[]] ? First : never
+          type RestKeys = Keys extends [PropertyKey, ...infer Rest extends [PropertyKey, ...PropertyKey[]]] ? Rest : never
+          for (let args of extractEntries(entry[key] as RecursiveRecord<RestKeys, Value>, restFilter as FilterArray<RestKeys>, depth - 1)) {
+            yield [key, ...args] as [FirstKey, ...RestKeys, Value] as [...unknown[]] as [...Keys, Value]
+          }
+        } else {
+          type LastKey = Keys extends [infer First extends PropertyKey] ? First : never
+          const value = entry[key] as Value
+          yield [key, value] as [LastKey, Value] as [...unknown[]] as [...Keys, Value]
+        }
+      }
+    }
+
+    return extractEntries(this.#entries, filter, this.#depth)
 
     // const keys = new Array(this.#depth)
     // for (let k = 0, e = keys.length - 1; k <= e; k++) { }
