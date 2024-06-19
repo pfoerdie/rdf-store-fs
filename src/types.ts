@@ -116,3 +116,6 @@ export type TypeMap<Types = Record<PropertyKey, any>> = Record<keyof Types, any>
 export type RecursiveRecord<Keys extends PropertyKey[], Value extends any>
   = Keys extends [infer Head extends PropertyKey, ...infer Tail extends PropertyKey[]] ? Record<Head, RecursiveRecord<Tail, Value>> : Value
 export type FilterArray<TargetArray extends unknown[]> = { [Index in keyof TargetArray]?: TargetArray[Index] | null }
+export type RecursiveMap<Keys extends any[], Value extends any>
+  = Keys extends [infer FirstKey extends any, ...infer RestKeys extends any[]]
+  ? Map<FirstKey, RestKeys extends [any, ...any[]] ? RecursiveMap<RestKeys, Value> : Value> : never
