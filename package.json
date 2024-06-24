@@ -48,7 +48,7 @@
     "rdf-parse": "^2.3.3",
     "rdf-serialize": "^2.2.3",
     "ts-jest": "^29.1.4",
-    "typescript": "^5.4.5"
+    "typescript": "^5.5.2"
   },
   "dependencies": {
     "@rdfjs/data-model": "^2.0.2"

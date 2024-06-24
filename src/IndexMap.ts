@@ -43,11 +43,15 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
   has(...keys: Keys): boolean {
     if (keys.length !== this.#depth) throw new Error('the number of keys must equal the depth')
     let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
-    for (let k = 0, e = keys.length - 2; k <= e; k++) {
-      if (!entry[keys[k]]) return false
-      entry = entry[keys[k]] as RecursiveRecord<[PropertyKey], Value>
+    let key: PropertyKey
+    const max = this.#depth - 2
+    for (let index = 0; index <= max; index++) {
+      key = keys[index]
+      if (!entry[key]) return false
+      entry = entry[key] as RecursiveRecord<[PropertyKey], Value>
     }
-    return keys[keys.length - 1] in entry
+    key = keys[keys.length - 1]
+    return key in entry
   }
 
   /**
@@ -58,11 +62,15 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
   get(...keys: Keys): Value | undefined {
     if (keys.length !== this.#depth) throw new Error('the number of keys must equal the depth')
     let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
-    for (let k = 0, e = keys.length - 2; k <= e; k++) {
-      if (!entry[keys[k]]) return
-      entry = entry[keys[k]] as RecursiveRecord<[PropertyKey], Value>
+    let key: PropertyKey
+    const max = this.#depth - 2
+    for (let index = 0; index <= max; index++) {
+      key = keys[index]
+      if (!entry[key]) return
+      entry = entry[key] as RecursiveRecord<[PropertyKey], Value>
     }
-    return entry[keys[keys.length - 1]]
+    key = keys[keys.length - 1]
+    return entry[key]
   }
 
   /**
@@ -77,12 +85,16 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
     if (keys.length !== this.#depth) throw new Error('the number of keys must equal the depth')
     if (typeof value === 'undefined') throw new Error('the value must not be undefined')
     let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
-    for (let k = 0, e = keys.length - 2; k <= e; k++) {
-      if (!entry[keys[k]]) entry[keys[k]] = Object.create(null)
-      entry = entry[keys[k]] as RecursiveRecord<[PropertyKey], Value>
+    let key: PropertyKey
+    const max = this.#depth - 2
+    for (let index = 0; index <= max; index++) {
+      key = keys[index]
+      if (!entry[key]) entry[key] = Object.create(null)
+      entry = entry[key] as RecursiveRecord<[PropertyKey], Value>
     }
-    if (keys[keys.length - 1] in entry) return false
-    entry[keys[keys.length - 1]] = value
+    key = keys[keys.length - 1]
+    if (key in entry) return false
+    entry[key] = value
     this.#size++
     return true
   }
@@ -99,12 +111,16 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
     if (keys.length !== this.#depth) throw new Error('the number of keys must equal the depth')
     if (typeof value === 'undefined') throw new Error('the value must not be undefined')
     let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
-    for (let k = 0, e = keys.length - 2; k <= e; k++) {
-      if (!entry[keys[k]]) entry[keys[k]] = Object.create(null)
-      entry = entry[keys[k]] as RecursiveRecord<[PropertyKey], Value>
+    let key: PropertyKey
+    const max = this.#depth - 2
+    for (let index = 0; index <= max; index++) {
+      key = keys[index]
+      if (!entry[key]) entry[key] = Object.create(null)
+      entry = entry[key] as RecursiveRecord<[PropertyKey], Value>
     }
-    const existed = keys[keys.length - 1] in entry
-    entry[keys[keys.length - 1]] = value
+    key = keys[keys.length - 1]
+    const existed = key in entry
+    entry[key] = value
     if (!existed) this.#size++
     return existed
   }
@@ -116,18 +132,26 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
    */
   delete(...keys: Keys) {
     if (keys.length !== this.#depth) throw new Error('the number of keys must equal the depth')
-    const chain: Array<[RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value>, PropertyKey]> = []
     let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
-    for (let k = 0, e = keys.length - 2; k <= e; k++) {
-      if (!entry[keys[k]]) return false
-      chain.push([entry, keys[k]])
-      entry = entry[keys[k]] as RecursiveRecord<[PropertyKey], Value>
+    let key: PropertyKey
+    const max = this.#depth - 2
+    const chain: Array<[RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value>, PropertyKey] | undefined> = new Array(max)
+    for (let index = 0; index <= max; index++) {
+      key = keys[index]
+      if (!entry[key]) return false
+      chain[index] = [entry, key]
+      entry = entry[key] as RecursiveRecord<[PropertyKey], Value>
     }
-    if (!(keys[keys.length - 1] in entry)) return false
+    key = keys[keys.length - 1]
+    if (!(key in entry)) return false
     this.#size--
-    cleanup: for (let [entry, key] of chain) {
-      delete entry[key]
+    delete entry[key]
+    cleanup: for (let index = max; index >= 0; index--) {
       for (let _ in entry) break cleanup
+      entry = (chain[index] as any[])[0]
+      key = (chain[index] as any[])[1]
+      // [entry, key] = chain[index]
+      delete entry[key]
     }
     return true
   }
@@ -159,48 +183,46 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
     }
 
     return extractEntries(this.#entries, filter, this.#depth)
-
-    // const keys = new Array(this.#depth)
-    // for (let k = 0, e = keys.length - 1; k <= e; k++) { }
-
-    // const temp = new Array(this.#depth) as { [Index in keyof Keys]?: Array<Keys[Index]> }
-    // const ind = new Array(this.#depth).fill(0)
-    // let k = 0, e = this.#depth - 1
-
-    // const depth = this.#depth
-    // const chain: Array<[RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value>, PropertyKey]> = []
-    // while (true) {
-    //   const index = chain.length
-    //   if (index < depth) {
-    //     if (isNull(filter[index])) {
-    //     } else {
-    //     }
-    //   }
-    // }
-
-    throw new Error('not implemented') // TODO
   }
 
-  // NOTE code from QuadIndex for comparison
-  // * entries(key0: PropertyKey, key1: PropertyKey, key2: PropertyKey, key3: PropertyKey) {
-  //   const index0 = this.#entries;
-  //   const arr0 = key0 ? key0 in index0 ? [key0] : [] : Object.keys(index0);
-  //   for (const key0 of arr0) {
-  //     const index1 = index0[key0];
-  //     const arr1 = key1 ? key1 in index1 ? [key1] : [] : Object.keys(index1);
-  //     for (const key1 of arr1) {
-  //       const index2 = index1[key1];
-  //       const arr2 = key2 ? key2 in index2 ? [key2] : [] : Object.keys(index2);
-  //       for (const key2 of arr2) {
-  //         const index3 = index2[key2];
-  //         const arr3 = key3 ? key3 in index3 ? [key3] : [] : Object.keys(index3);
-  //         for (const key3 of arr3) {
-  //           yield [key0, key1, key2, key3];
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
+  *entries_2(...filter: FilterArray<Keys>): IterableIterator<[...Keys, Value]> {
+    // TODO pick one algorithm
+    if (filter.length > this.#depth) throw new Error('the number of filter keys must not exceed the depth')
+    const keys: Keys = new Array(this.#depth) as Keys
+    let entry: RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value> = this.#entries
+    let options: PropertyKey[]
+    const max = this.#depth - 2
+    const chain: Array<[RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value>, PropertyKey[]] | null | undefined> = new Array(max)
+    let index = 0
+    while (index >= 0) {
+      if (index <= max) {
+        if (chain[index]) {
+          entry = (chain[index] as any[])[0]
+          options = (chain[index] as any[])[1]
+        } else {
+          options = isNull(filter[index]) ? Object.keys(entry) : ((filter[index] as PropertyKey) in entry) ? [filter[index] as PropertyKey] : []
+          chain[index] = [entry, options]
+        }
+        if (options.length > 0) {
+          const key = options.shift() as PropertyKey
+          keys[index] = key
+          entry = entry[key] as RecursiveRecord<[PropertyKey, ...PropertyKey[]], Value>
+          index++
+        } else {
+          chain[index] = null
+          index--
+        }
+      } else {
+        options = isNull(filter[index]) ? Object.keys(entry) : ((filter[index] as PropertyKey) in entry) ? [filter[index] as PropertyKey] : []
+        for (let key of options) {
+          keys[index] = key
+          const value = entry[key] as Value
+          yield [...keys, value]
+        }
+        index--
+      }
+    }
+  }
 
   /**
    * Iterate over the keys of the IndexMap with the use of an optional filter.
@@ -211,6 +233,15 @@ export default class IndexMap<Keys extends [PropertyKey, ...PropertyKey[]], Valu
     if (filter.length > this.#depth) throw new Error('the number of filter keys must not exceed the depth')
     // TODO do not use .entries()
     for (let args of this.entries(...filter)) {
+      yield args.slice(0, -1) as Keys
+    }
+  }
+
+  * keys_2(...filter: FilterArray<Keys>): IterableIterator<Keys> {
+    // TODO pick one algorithm
+    if (filter.length > this.#depth) throw new Error('the number of filter keys must not exceed the depth')
+    // TODO do not use .entries()
+    for (let args of this.entries_2(...filter)) {
       yield args.slice(0, -1) as Keys
     }
   }
